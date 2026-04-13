@@ -1,0 +1,21 @@
+name: Commit Agent
+description: Analyzes staged changes and commits with an AI-generated message.
+
+steps:
+  - name: identify-changes
+    description: Get staged changes
+    run: git diff --cached
+
+  - name: generate-message
+    description: AI-generated commit message
+    run: |
+      claude -p "Generate a concise commit message (max 250 words) for these changes:
+      {{ steps.identify-changes.output }}"
+    retry:
+      attempts: 2
+      delay: 5s
+
+  - name: commit
+    description: Commit with generated message
+    run: git commit -m "{{ steps.generate-message.output }}"
+    when: "{{ steps.identify-changes.output != '' }}"

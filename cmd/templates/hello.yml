@@ -1,0 +1,9 @@
+name: Hello flowcmd
+description: A minimal starter workflow.
+
+steps:
+  - name: greet
+    run: echo "hello from flowcmd"
+
+  - name: bye
+    run: echo "goodbye"

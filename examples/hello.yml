@@ -1,0 +1,25 @@
+name: Hello Flow
+description: Demonstrates sequential, parallel, and templated steps.
+
+steps:
+  - name: greet
+    description: Produce a greeting
+    run: echo "hello from flowcmd"
+
+  - name: echo-back
+    description: Reuse previous output
+    run: echo "greeting was {{ steps.greet.output }}"
+
+  - name: ping
+    description: Parallel A
+    run: echo "ping" && sleep 0.1
+    parallel: true
+
+  - name: pong
+    description: Parallel B
+    run: echo "pong" && sleep 0.1
+    parallel: true
+
+  - name: done
+    description: Final
+    run: echo "all done"

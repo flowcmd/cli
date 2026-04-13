@@ -1,0 +1,43 @@
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test + coverage
+*.test
+*.out
+coverage.txt
+coverage.html
+coverage.out
+*.prof
+
+# Go workspace / vendor
+vendor/
+go.work
+go.work.sum
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Claude Code local state (per-user; never committed)
+.claude/
+
+# Env / secrets
+.env
+.env.local
+*.pem
+*.key
