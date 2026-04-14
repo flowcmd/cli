@@ -7,7 +7,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 const scopeDirName = ".flowcmd"
@@ -64,6 +67,52 @@ func looksLikePath(arg string) bool {
 func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// completeWorkflowNames is a cobra ValidArgsFunction that completes the first
+// positional argument of commands that take a single workflow name. Runs on
+// every TAB press in a completion-enabled shell; must be fast and silent.
+func completeWorkflowNames(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return collectWorkflowNames(), cobra.ShellCompDirectiveNoFileComp
+}
+
+// collectWorkflowNames returns the sorted, de-duplicated union of workflow
+// names (filename stems) across the local and global scopes. Used for shell
+// tab-completion of `run`, `remove`, and `validate` arguments.
+//
+// Never returns an error: completion must degrade silently. Missing scope
+// directories and unreadable files are skipped.
+func collectWorkflowNames() []string {
+	seen := make(map[string]struct{})
+	addFrom := func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			if !isYAMLExt(filepath.Ext(e.Name())) {
+				continue
+			}
+			stem := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+			seen[stem] = struct{}{}
+		}
+	}
+	addFrom(localDir())
+	if gdir, err := globalDir(); err == nil {
+		addFrom(gdir)
+	}
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // resolveWorkflow turns a `flowcmd run` argument into a concrete file path.

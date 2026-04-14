@@ -13,10 +13,11 @@ import (
 var removeGlobal bool
 
 var removeCmd = &cobra.Command{
-	Use:     "remove <name>",
-	Aliases: []string{"rm"},
-	Short:   "Remove a workflow from local (default) or global scope",
-	Args:    cobra.ExactArgs(1),
+	Use:               "remove <name>",
+	Aliases:           []string{"rm"},
+	Short:             "Remove a workflow from local (default) or global scope",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeWorkflowNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := ensureYAMLExt(args[0])
 		if err := validateWorkflowName(name); err != nil {

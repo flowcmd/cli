@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // helpers below; tests for resolveWorkflow appear after.
@@ -121,5 +123,61 @@ func TestResolveWorkflow_NotFound(t *testing.T) {
 	_, err := resolveWorkflow("missing", io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected not-found error, got %v", err)
+	}
+}
+
+func TestCollectWorkflowNames(t *testing.T) {
+	cwd, home := chdirAndFakeHome(t)
+	ldir := filepath.Join(cwd, scopeDirName)
+	gdir := filepath.Join(home, scopeDirName)
+	_ = os.MkdirAll(ldir, 0o755)
+	_ = os.MkdirAll(gdir, 0o755)
+	writeFile(t, filepath.Join(ldir, "local-only.yml"), sampleYAML)
+	writeFile(t, filepath.Join(ldir, "shared.yml"), sampleYAML)
+	writeFile(t, filepath.Join(ldir, "notes.txt"), "skip me") // non-yaml, must be ignored
+	writeFile(t, filepath.Join(gdir, "global-only.yaml"), sampleYAML)
+	writeFile(t, filepath.Join(gdir, "shared.yml"), sampleYAML) // duplicate stem
+
+	names := collectWorkflowNames()
+	want := []string{"global-only", "local-only", "shared"}
+	if len(names) != len(want) {
+		t.Fatalf("got %v, want %v", names, want)
+	}
+	for i, n := range want {
+		if names[i] != n {
+			t.Errorf("names[%d]=%q want %q (full: %v)", i, names[i], n, names)
+		}
+	}
+}
+
+func TestCollectWorkflowNames_EmptyScopes(t *testing.T) {
+	chdirAndFakeHome(t)
+	if got := collectWorkflowNames(); len(got) != 0 {
+		t.Errorf("expected empty slice, got %v", got)
+	}
+}
+
+func TestCompleteWorkflowNames_SuggestsStems(t *testing.T) {
+	cwd, _ := chdirAndFakeHome(t)
+	dir := filepath.Join(cwd, scopeDirName)
+	_ = os.MkdirAll(dir, 0o755)
+	writeFile(t, filepath.Join(dir, "hello.yml"), sampleYAML)
+	writeFile(t, filepath.Join(dir, "deploy.yml"), sampleYAML)
+
+	got, directive := completeWorkflowNames(nil, nil, "")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 names, got %v", got)
+	}
+	if directive&cobra.ShellCompDirectiveNoFileComp == 0 {
+		t.Errorf("expected NoFileComp directive, got %v", directive)
+	}
+}
+
+func TestCompleteWorkflowNames_SecondArgNoSuggestions(t *testing.T) {
+	// Commands take a single arg; once one is provided, completion should
+	// return nothing rather than repeating the list.
+	got, _ := completeWorkflowNames(nil, []string{"already"}, "")
+	if got != nil {
+		t.Errorf("expected nil after first arg filled, got %v", got)
 	}
 }
