@@ -2,8 +2,7 @@
 
 # flowcmd
 
-**Taskfile for the AI era.**
-Run YAML workflows where shell commands and LLM calls are first-class steps.
+**Deterministic workflows that call an LLM only when they need one.**
 
 [![CI](https://github.com/flowcmd/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/flowcmd/cli/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/flowcmd/cli.svg)](https://pkg.go.dev/github.com/flowcmd/cli)
@@ -12,62 +11,53 @@ Run YAML workflows where shell commands and LLM calls are first-class steps.
 
 </div>
 
-```sh
-# install
-go install github.com/flowcmd/cli@latest
-
-# scaffold a workflow
-flowcmd init
-
-# run it
-flowcmd run hello
-```
-
-That's it. You just ran your first workflow. Keep reading to write a real one.
-
 ---
 
-## Table of contents
+## The problem
 
-- [Why flowcmd](#why-flowcmd)
-- [Your first workflow](#your-first-workflow) — 2-minute tutorial
-- [Core concepts](#core-concepts) — scope, resolution, templates
-- [Command reference](#command-reference)
-- [Cookbook](#cookbook) — real-world recipes
-- [Workflow schema](#workflow-schema) — full YAML reference
-- [FAQ](#faq)
-- [Contributing](#contributing)
+Most AI automation today is written in plain English. A long prompt lists every step: "read the file, look for errors, run the tests, summarize the results." A large model reads the whole thing, plans it, then executes each step.
 
----
+That works, but it has a cost:
 
-## Why flowcmd
+- **Tokens**: every run re-ships the full instruction set to the model, plus whatever context the steps accumulate.
+- **Latency**: the model has to read, plan, and narrate each step before anything actually happens on disk.
+- **Fragility**: a step that's really just `git diff` becomes a model call with all the non-determinism that implies.
+- **Lock-in**: the workflow lives inside whatever agent runtime you chose; you can't easily hand it to someone else to run.
 
-Today's AI automation forces a choice:
+Most of the steps in a real workflow don't need a model. `git diff`, `go test`, `curl`, `jq`, `gh pr view` — these are deterministic commands that should just run. The model only needs to show up where there's actual judgment: writing a commit message, classifying an issue, summarizing a diff.
 
-- **All-LLM orchestration** (Claude Code, agent frameworks) — the model drives every step. Slow, expensive, non-deterministic for work that's really just `git diff`.
-- **Classic task runners** (Make, Taskfile, just) — fast and deterministic, but zero AI awareness. Shelling out to `claude -p` works but there's no state between steps.
+## What flowcmd does
 
-**flowcmd is the third option.** Declarative YAML. Shell steps run as shell. LLM steps are just steps that happen to call an LLM. Outputs flow between them through template references. You pay for AI only where you actually need judgment.
+flowcmd is a small CLI that runs **workflows written as YAML**. Each workflow is a list of steps. A step is a shell command. If a step needs an LLM, you call one from that step — any LLM, any CLI, local or cloud. The model is *in* the loop, not *around* it.
 
 ```yaml
+name: Commit agent
 steps:
   - name: diff
-    run: git diff --cached            # cheap, deterministic
+    run: git diff --cached          # plain command, fast and free
 
   - name: message
-    run: claude -p "Commit msg: {{ steps.diff.output }}"   # LLM only where needed
+    run: my-llm "Write a commit msg for: {{ steps.diff.output }}"
+    when: "{{ steps.diff.output != '' }}"   # only when there is something to commit
 
   - name: commit
-    run: git commit -m "{{ steps.message.output }}"        # deterministic again
+    run: git commit -m "{{ steps.message.output }}"
 ```
+
+That's the whole idea. Commands you already know, stitched together, with the LLM invited in only where it earns its keep.
+
+## Why this shape
+
+- **Every step is a real process.** If it works in your shell, it works in a step.
+- **Outputs flow between steps** through simple `{{ steps.<name>.output }}` templates.
+- **You choose the model.** Local (e.g. a local model server), cloud (any vendor's CLI), or your own wrapper. flowcmd doesn't care; it runs whatever binary you name.
+- **Sequential by default, parallel when you say so.** Mark adjacent steps `parallel: true` and they run concurrently.
+- **Deterministic unless you ask for randomness.** A workflow with no LLM steps runs the same way every time.
+- **Readable as a file.** A YAML workflow is something you can review, diff, commit, and hand to a teammate.
 
 ---
 
-## Your first workflow
-
-A 2-minute tutorial. By the end you have a working commit agent.
-
-### 1. Install
+## Install
 
 ```sh
 go install github.com/flowcmd/cli@latest
@@ -79,23 +69,22 @@ Verify:
 flowcmd --version
 ```
 
-### 2. Scaffold
+## Your first workflow
 
 ```sh
-flowcmd init
-```
-
-Creates `./.flowcmd/hello.yml`, a two-step sample. Run it:
-
-```sh
+flowcmd init      # creates ./.flowcmd/hello.yml
 flowcmd run hello
 ```
 
-You'll see a live TUI with checkmarks as each step completes.
+You'll see a live terminal view with checkmarks as each step completes. That's a workflow running.
 
-### 3. Write a real one
+Now open `./.flowcmd/hello.yml` and read it. Two echo steps. Add a third. Run it again. That's the whole loop.
 
-Create `./.flowcmd/commit.yml`:
+## A workflow with an LLM in it
+
+Pick any CLI that reads a prompt and prints a response to stdout. The examples below use a placeholder `my-llm` — substitute whichever CLI you use (a local model runner, a cloud vendor's CLI, a shell script wrapping an HTTP API, or anything else).
+
+Save this as `./.flowcmd/commit.yml`:
 
 ```yaml
 name: Commit agent
@@ -107,9 +96,9 @@ steps:
     run: git diff --cached
 
   - name: message
-    description: Ask the LLM for a commit message
+    description: Ask the model for a commit message
     run: |
-      claude -p "Write a one-line commit message for:
+      my-llm "Write a one-line commit message for these changes:
       {{ steps.diff.output }}"
     when: "{{ steps.diff.output != '' }}"
 
@@ -125,124 +114,202 @@ Run it:
 flowcmd run commit
 ```
 
-Done. You've just replaced a multi-turn AI agent with a deterministic workflow that only invokes the LLM where judgment is needed.
+The `diff` step is pure shell. The `message` step calls a model — but only when there's an actual diff to describe. The `commit` step is pure shell again. The LLM touched exactly one step.
 
-### 4. Share it
+## Sharing workflows
 
-Install it globally so every project can use it:
+Workflows live in two places:
+
+| Scope | Where | When to use |
+|---|---|---|
+| **local** | `./.flowcmd/` | Project-specific. Commit it to the repo. |
+| **global** | `~/.flowcmd/` | Personal workflows you use everywhere. |
+
+Install one into the global scope:
 
 ```sh
 flowcmd add -g ./.flowcmd/commit.yml
 ```
 
-Now `flowcmd run commit` works from any directory.
+Now `flowcmd run commit` works from any directory. Same workflow, any project.
 
 ---
 
-## Core concepts
+## Writing workflows
 
-### Scope
+### The shape of a workflow
 
-Workflows live in two places:
+```yaml
+name: Example                    # required — shown in the terminal header
+description: What this does      # optional
 
-| Scope | Directory | Meaning |
-|---|---|---|
-| **local** | `./.flowcmd/` | Project-specific workflows. Check into git. |
-| **global** | `~/.flowcmd/` | Personal workflows shared across all your projects. |
+steps:                           # required — one or more steps
+  - name: step-one               # lowercase, hyphens/underscores, unique
+    description: What this step does
+    run: echo hello              # required — any shell command
+```
 
-### Resolution
+A step's `run` is handed to `sh -c`, so anything you can type in a shell works: pipes, `&&`, multi-line heredocs, `$ENV_VAR`, redirections, the lot.
 
-`flowcmd run <arg>` behaves differently based on what `<arg>` looks like:
+### Reusing outputs
 
-- **Contains `/`, `\`, `.yml`, or `.yaml`** → treated as a **file path**. Used as-is.
-- **Bare name** → resolved through scopes:
-  1. Look in `./.flowcmd/<name>.yml` (local wins).
-  2. Fall back to `~/.flowcmd/<name>.yml`.
-  3. If both have it, local is used and a warning is printed to stderr.
-  4. If neither has it, exit with an error listing both scopes.
+Any step can read what an earlier step produced:
 
-### Templates
+```yaml
+steps:
+  - name: hello
+    run: echo "world"
 
-Any step can reference the output of any earlier step.
+  - name: echo-back
+    run: echo "previous said {{ steps.hello.output }}"
+```
 
-| Syntax | Example | Notes |
-|---|---|---|
-| By name | `{{ steps.diff.output }}` | Preferred. Refactor-safe. |
-| By index | `{{ steps[0].output }}` | Positional, 0-indexed. |
-| Property | `.output`, `.error`, `.exitcode` | stdout (trimmed), stderr, exit code |
-| Comparison | `{{ steps.x.output != '' }}` | For `when:` conditionals. Supports `==` and `!=`. |
+Three properties are available on every step that has run:
 
-Templates resolve at execution time. Forward references (to steps that haven't run yet) are caught at validation time — `flowcmd validate` will reject them.
+| Property | What it is |
+|---|---|
+| `.output` | stdout, trimmed |
+| `.error` | stderr |
+| `.exitcode` | integer exit code |
 
-### Execution model
+References are by name (`steps.hello.output`) or by position (`steps[0].output`). Names are refactor-safe; positions are good for quick throwaways.
 
-- Steps run **sequentially** by default.
-- Adjacent steps with `parallel: true` form a **concurrent group** — they run at the same time, and the workflow waits for all of them before moving on.
-- On failure anywhere: workflow stops. If it's inside a parallel group, siblings are cancelled via `context.Context` (their running processes are killed).
-- On `when:` evaluating to false/empty: the step is skipped (gray `○` in the TUI).
-- `retry: { attempts: N, delay: Ts }` re-runs a step on non-zero exit, with a delay between attempts.
+### Skipping a step
+
+Use `when:` with a simple template expression. If it evaluates to empty, `false`, or `0`, the step is skipped (shown in gray in the terminal).
+
+```yaml
+- name: deploy
+  run: ./deploy.sh
+  when: "{{ steps.tests.exitcode == 0 }}"
+```
+
+Supported comparisons: `==` and `!=`. Literals in comparisons should be quoted: `'0'`, `''`.
+
+### Running steps in parallel
+
+Mark adjacent steps `parallel: true` and they run concurrently. The workflow waits for all of them before moving on:
+
+```yaml
+- name: lint
+  run: my-linter
+  parallel: true
+
+- name: test
+  run: my-test-runner
+  parallel: true
+
+- name: report
+  run: echo "both done"       # runs after both finish
+```
+
+If any step in a parallel group fails, the others are cancelled (their processes are killed) and the workflow stops.
+
+### Retrying a flaky step
+
+```yaml
+- name: flaky
+  run: ./sometimes-fails.sh
+  retry:
+    attempts: 3          # try up to 3 times
+    delay: 2s            # wait 2s between attempts
+```
+
+Only non-zero exits trigger a retry. If the step still fails after all attempts, the workflow stops.
+
+### Calling any LLM
+
+flowcmd has no opinion about which model you call. A step just runs a command. Anything that reads a prompt and writes a response works:
+
+```yaml
+# a local model runner
+- name: classify
+  run: my-local-llm "Classify this issue: {{ steps.body.output }}"
+
+# a vendor CLI
+- name: summarize
+  run: my-cloud-llm "Summarize: {{ steps.diff.output }}"
+
+# your own wrapper script
+- name: review
+  run: ./scripts/llm.sh "Review this code: {{ steps.files.output }}"
+
+# a raw HTTP call
+- name: explain
+  run: |
+    curl -s https://my-endpoint/v1/complete \
+      -d "{\"prompt\": \"Explain: {{ steps.error.output }}\"}" \
+      | jq -r '.text'
+```
+
+Swap models by changing one line. No lock-in.
+
+### Passing large context
+
+Some prompts need the contents of multiple files. Build the context in a step, then reference it:
+
+```yaml
+- name: context
+  run: cat src/*.go
+
+- name: review
+  run: |
+    my-llm "Review this Go code for bugs:
+    {{ steps.context.output }}"
+```
+
+Anything your shell can do, a step can do — read files, pipe through `jq`, grep for patterns, base64-encode, whatever.
 
 ---
 
-## Command reference
-
-Every command below is copy-pasteable. Flags mirror across commands where they mean the same thing (`-g` is always "global scope").
+## Commands
 
 ### `flowcmd init`
 
-Bootstrap a `.flowcmd/` directory in the current project with a starter workflow.
+Create `./.flowcmd/hello.yml` — a minimal starter workflow.
 
 ```sh
-flowcmd init              # creates ./.flowcmd/hello.yml
-flowcmd init --force      # overwrite if present
+flowcmd init
+flowcmd init --force   # overwrite if present
 ```
 
 ### `flowcmd run <name-or-path>`
 
-Execute a workflow.
+Run a workflow. The argument is a **name** (looked up in scopes) or a **path** (used as-is):
 
 ```sh
-flowcmd run hello                      # by name (resolves through scopes)
-flowcmd run ./.flowcmd/hello.yml       # by file path
-flowcmd run hello --no-tui             # plain output (CI / logs / pipes)
-flowcmd run hello --dry-run            # print execution plan, do not run
+flowcmd run hello                      # by name
+flowcmd run ./workflows/hello.yml      # by path
+
+flowcmd run hello --no-tui             # plain text (CI, logs, pipes)
+flowcmd run hello --dry-run            # print the plan, don't run
 flowcmd run hello --verbose            # show full stdout of every step
 ```
 
-| Flag | Default | Effect |
-|---|---|---|
-| `-v, --verbose` | false | Stream full stdout of every step. |
-| `--dry-run` | false | Validate and show the execution plan. Nothing runs. |
-| `--no-tui` | false | Plain text output. Use in CI or when piping. |
+When you pass a name, flowcmd looks in local scope first (`./.flowcmd/<name>.yml`), then global scope (`~/.flowcmd/<name>.yml`). If both exist, local wins and a warning is printed.
 
 ### `flowcmd add <path-or-url>`
 
-Install a workflow into a scope. Accepts local files or `http(s)://` URLs.
+Install a workflow into a scope. Accepts local files or `http(s)://` URLs (up to 1 MiB).
 
 ```sh
-flowcmd add ./my-workflow.yml                         # local scope
-flowcmd add -g ./my-workflow.yml                      # global scope
-flowcmd add https://example.com/flow.yml              # from a URL
-flowcmd add ./my.yml --as deploy                      # save under a different name
-flowcmd add ./my.yml --force                          # overwrite existing
+flowcmd add ./my-workflow.yml               # into ./.flowcmd/
+flowcmd add -g ./my-workflow.yml            # into ~/.flowcmd/ (global)
+flowcmd add https://example.com/flow.yml    # fetch from a URL
+flowcmd add ./my.yml --as deploy            # save under a different name
+flowcmd add ./my.yml --force                # overwrite existing
 ```
 
-Every added workflow is validated before being written. A broken YAML will never replace a working one on disk.
-
-| Flag | Effect |
-|---|---|
-| `-g, --global` | Install to `~/.flowcmd/`. Default is `./.flowcmd/`. |
-| `-f, --force` | Overwrite if the destination name already exists. |
-| `--as <name>` | Save under a different filename (extension optional). |
+Every added workflow is validated before being written. A broken YAML never replaces a working one on disk.
 
 ### `flowcmd remove <name>`
 
 Delete a workflow from a scope.
 
 ```sh
-flowcmd remove hello         # from ./.flowcmd/
-flowcmd remove -g hello      # from ~/.flowcmd/
-flowcmd rm hello             # alias
+flowcmd remove hello        # from ./.flowcmd/
+flowcmd remove -g hello     # from ~/.flowcmd/
+flowcmd rm hello            # alias
 ```
 
 ### `flowcmd list`
@@ -250,73 +317,45 @@ flowcmd rm hello             # alias
 Show installed workflows. Global first, local second.
 
 ```sh
-flowcmd list          # both scopes
-flowcmd list -g       # global only
-flowcmd list -l       # local only
-```
-
-Sample output:
-
-```
-global
-- commit — Commit agent [3 steps]
-- deploy — Deploy pipeline [5 steps]
-
-local
-- ci — Pre-push checks [4 steps]
+flowcmd list       # both scopes
+flowcmd list -g    # global only
+flowcmd list -l    # local only
 ```
 
 ### `flowcmd validate <file.yml>`
 
-Parse and schema-check a workflow file without running it. Exits non-zero on any error — suitable for pre-commit hooks and CI.
+Parse and schema-check a workflow without running it. Exits non-zero on any error — good for pre-commit hooks and CI.
 
 ```sh
-flowcmd validate .flowcmd/commit.yml
-# ✓ Commit agent valid (3 steps)
+flowcmd validate ./.flowcmd/commit.yml
 ```
-
-Validates:
-- YAML syntax
-- Required fields (`name`, `steps[].name`, `steps[].run`)
-- Step name regex (`^[a-z][a-z0-9_-]*$`, max 64 chars, unique)
-- Template references point to earlier, real steps
-- Retry config sanity
 
 ---
 
-## Cookbook
+## What flowcmd does not do
 
-Real-world workflows. Drop any of these into `./.flowcmd/` or `~/.flowcmd/`.
+Worth being explicit:
 
-### Commit agent
+- **It does not ship an LLM.** flowcmd is a runner. It executes commands. If a command happens to call a model, that model comes from your system, not from flowcmd.
+- **It does not manage secrets.** Steps inherit your shell environment. Use `.env` files or your OS keychain, the same way any other tool would.
+- **It does not run in the cloud.** This is a local CLI. You can invoke it from CI pipelines if you want.
+- **It does not keep state between runs.** Each invocation is independent. Steps communicate through templates *within* a run, not across runs.
+- **It does not interpret step output.** Your step ran, it printed something, flowcmd captured it. What it means is up to the next step.
 
-Stage changes, generate a message, commit.
+## A few worked examples
 
-```yaml
-name: Commit agent
-steps:
-  - name: diff
-    run: git diff --cached
-  - name: message
-    run: claude -p "Commit msg for: {{ steps.diff.output }}"
-    when: "{{ steps.diff.output != '' }}"
-  - name: commit
-    run: git commit -m "{{ steps.message.output }}"
-    when: "{{ steps.diff.output != '' }}"
-```
+Copy any of these into `./.flowcmd/` and run them. Substitute `my-llm` with whichever LLM CLI you use.
 
-### Pre-push gate
-
-Lint and test in parallel, then allow push.
+### Pre-push check
 
 ```yaml
 name: Pre-push
 steps:
   - name: lint
-    run: golangci-lint run
+    run: my-linter
     parallel: true
   - name: test
-    run: go test -race ./...
+    run: my-test-runner
     parallel: true
   - name: ok
     run: echo "ready to push"
@@ -324,175 +363,96 @@ steps:
 
 ### PR review
 
-Pull the diff against main, have an LLM review it, print the result.
-
 ```yaml
 name: PR review
 steps:
   - name: diff
     run: git diff origin/main...HEAD
+
   - name: review
     run: |
-      claude -p "Review this diff. List bugs, missing tests, unclear names.
+      my-llm "Review this diff. List bugs, missing tests, unclear names:
       {{ steps.diff.output }}"
+
   - name: show
     run: echo "{{ steps.review.output }}"
 ```
 
-### Flaky test investigator
-
-Run a test 10 times; if it ever fails, ask the LLM why.
+### Flake investigator
 
 ```yaml
 name: Flake hunt
 steps:
   - name: run
-    run: go test -run TestThing -count=10 ./...
-    retry:
-      attempts: 1
+    run: my-test-runner --run TestThing --count=10
+
   - name: analyze
     when: "{{ steps.run.exitcode != 0 }}"
     run: |
-      claude -p "This Go test output suggests a flake. Theories?
+      my-llm "This test output looks flaky. What might cause it?
       {{ steps.run.error }}"
 ```
 
-### Deploy gate
-
-Build, test, and only deploy if both pass.
-
-```yaml
-name: Deploy
-steps:
-  - name: build
-    run: make build
-    parallel: true
-  - name: test
-    run: make test
-    parallel: true
-  - name: deploy
-    run: ./bin/deploy
-```
-
 ### Issue triage
-
-Read an issue body from stdin, classify it with the LLM.
 
 ```yaml
 name: Triage
 steps:
   - name: body
-    run: gh issue view $ISSUE_NUMBER --json body -q .body
+    run: gh issue view "$ISSUE" --json body -q .body
+
   - name: classify
     run: |
-      claude -p "Classify as bug/feature/question/duplicate:
+      my-llm "Classify as bug/feature/question/duplicate:
       {{ steps.body.output }}"
+
   - name: label
-    run: gh issue edit $ISSUE_NUMBER --add-label "{{ steps.classify.output }}"
+    run: gh issue edit "$ISSUE" --add-label "{{ steps.classify.output }}"
 ```
 
----
-
-## Workflow schema
-
-Full reference for `workflow.yml`.
-
-### Top-level
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | ✓ | Human-readable workflow name. Shown in the TUI header. |
-| `description` | string | | Optional one-line description. |
-| `steps` | list | ✓ | At least one step. |
-
-### Step
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | ✓ | Matches `^[a-z][a-z0-9_-]*$`, max 64 chars, unique in the workflow. |
-| `run` | string | ✓ | Shell command, executed via `sh -c`. Multi-line via `\|`. Supports templates. |
-| `description` | string | | Shown in the TUI next to the step name. |
-| `when` | string | | Template expression. If it evaluates to empty/`false`/`0`, the step is skipped. |
-| `parallel` | bool | | When true, this step joins an adjacent parallel group. |
-| `retry` | object | | `{ attempts: N, delay: <duration> }`. On non-zero exit, retries up to `N` times with `delay` between. |
-
-### Template expressions
-
-Wrapped in `{{ ... }}`. Resolved at each step's execution time.
-
-| Form | Result |
-|---|---|
-| `{{ steps.<name>.<prop> }}` | Value of `<prop>` on named step. |
-| `{{ steps[<n>].<prop> }}` | Value of `<prop>` on 0-indexed step. |
-| `{{ <left> == <right> }}` | `"true"` or `"false"`. Literals are quoted: `''`, `"x"`. |
-| `{{ <left> != <right> }}` | Negated equality. |
-
-Properties: `output` (trimmed stdout), `error` (stderr), `exitcode`.
-
-### Complete example
+### Release notes
 
 ```yaml
-name: Full example
-description: Showcases every feature.
-
+name: Release notes
 steps:
-  - name: hello
-    description: A simple echo
-    run: echo "hello"
+  - name: log
+    run: git log --oneline $(git describe --tags --abbrev=0)..HEAD
 
-  - name: reuse
-    description: Reference a previous step
-    run: echo "previous said {{ steps.hello.output }}"
+  - name: draft
+    run: |
+      my-llm "Write human-readable release notes from this commit log:
+      {{ steps.log.output }}"
 
-  - name: skipped-if-empty
-    when: "{{ steps.hello.output != '' }}"
-    run: echo "ran"
-
-  - name: flaky
-    run: /bin/sh -c "if [ -f /tmp/ok ]; then echo done; else touch /tmp/ok; exit 1; fi"
-    retry:
-      attempts: 3
-      delay: 500ms
-
-  - name: parallel-a
-    run: sleep 0.2 && echo a
-    parallel: true
-
-  - name: parallel-b
-    run: sleep 0.2 && echo b
-    parallel: true
-
-  - name: wrap-up
-    run: echo "all {{ steps[5].output }} and {{ steps[4].output }}"
+  - name: save
+    run: echo "{{ steps.draft.output }}" > NOTES.md
 ```
 
 ---
 
-## FAQ
+## Validation and error behavior
 
-**Why YAML and not a real scripting language?**
-Because declarative workflows are reviewable, diffable, and portable. If you want a real language, you can always `run: ./my-script.sh`. flowcmd orchestrates; it doesn't compete with your shell.
+- `name`, `steps`, and each step's `name` + `run` are required.
+- Step names match `^[a-z][a-z0-9_-]*$`, max 64 chars, unique within the workflow.
+- Template references must point to **earlier** steps. Forward references are caught at validation time, not at runtime.
+- On any step failure, the workflow stops. If the failed step is in a parallel group, its siblings are cancelled.
+- On a template resolution error (e.g. referencing a step that hasn't run), the workflow stops with a clear message pointing to the template.
 
-**Does flowcmd call any LLM by itself?**
-No. flowcmd only runs shell commands. LLMs enter the picture when *you* write a step that calls one (`claude -p "..."`, `openai ...`, `curl ...`). flowcmd is the orchestrator, not the model.
+## Frequently asked
 
-**How does this compare to GitHub Actions / CircleCI / Temporal?**
-Those run in the cloud and target CI/CD or durable execution. flowcmd is a local CLI — think "Taskfile that knows about LLMs" not "Temporal for AI." You can *call* flowcmd from a CI pipeline if you want.
+**Why YAML?**
+Because a workflow is a list of steps, and YAML is the shortest honest way to write a list of steps that humans can read and diff. If you need a real scripting language, put it in the `run:` of a step.
 
-**How does it compare to LangChain / Claude Code / agent frameworks?**
-Those put an LLM in control of every step. flowcmd inverts that: the workflow controls the steps; the LLM is summoned only where needed. You get determinism by default and intelligence on demand.
+**Is there state between runs?**
+No. Each run is fresh. If you need persistent state, write it to a file in one run and read it in the next.
 
-**Is there a secrets story?**
-flowcmd runs in your shell, so it inherits your environment. Use `.env` files or your OS keychain, same as any other tool. Nothing is captured, logged, or uploaded.
+**Can a step read stdin?**
+Steps run with stdin pointed at `/dev/null`. If you need interactivity, run the interactive command directly from your shell. flowcmd is for automation.
 
-**What if a step needs interactive input?**
-Steps run with stdin attached to `/dev/null`. If you need interactivity, run the interactive tool directly — flowcmd is for automation.
+**Does it run on Windows?**
+The binary cross-compiles. Steps use `sh -c`, so they assume a POSIX shell. WSL works.
 
-**Does it work on Windows?**
-The Go binary cross-compiles. Commands using `sh -c` assume a POSIX shell. WSL works. Native cmd.exe / PowerShell support is not a current goal.
-
-**How do I use my own LLM / a local model?**
-Any CLI that reads a prompt and writes to stdout works. `ollama run llama3`, `llm "..." -m claude-3-5-sonnet`, a shell script wrapping an API call — anything.
+**What if I want the model to drive the whole workflow?**
+Then flowcmd isn't what you want — you want an agent runtime. flowcmd's whole premise is that the workflow drives and the model is a tool the workflow reaches for. That's a deliberate trade.
 
 ---
 
@@ -503,18 +463,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.
 Quick dev loop:
 
 ```sh
-make test      # unit + integration tests
-make race      # with race detector
-make lint      # golangci-lint
-make build     # binary at bin/flowcmd
+make test     # unit + integration tests
+make race     # with race detector
+make lint     # golangci-lint
+make build    # binary at bin/flowcmd
 ```
 
-Coverage: ~98%. New code should come with tests.
-
-Report bugs: [open an issue](https://github.com/flowcmd/cli/issues/new?template=bug_report.md).
-Suggest features: [feature request](https://github.com/flowcmd/cli/issues/new?template=feature_request.md).
-
----
+Report a bug: [open an issue](https://github.com/flowcmd/cli/issues/new?template=bug_report.md).
+Suggest a feature: [feature request](https://github.com/flowcmd/cli/issues/new?template=feature_request.md).
 
 ## License
 
