@@ -1,5 +1,9 @@
 # flowcmd
 
+[![CI](https://github.com/flowcmd/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/flowcmd/cli/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/flowcmd/cli.svg)](https://pkg.go.dev/github.com/flowcmd/cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Taskfile for the AI era. Run YAML-defined workflows with sequential & parallel shell steps and LLM calls as first-class citizens.
 
 ## Install
@@ -110,3 +114,11 @@ make test        # unit + integration tests
 make race        # with race detector
 make build
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+[MIT](LICENSE) © The flowcmd authors.

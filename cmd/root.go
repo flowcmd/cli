@@ -13,6 +13,12 @@ var rootCmd = &cobra.Command{
 	Long:  "flowcmd runs declarative YAML workflows where shell scripts and LLM calls are first-class citizens. Sequential and parallel steps, templates, retries, and a TUI.",
 }
 
+// SetVersionInfo wires build-time metadata (injected by goreleaser) into the
+// root command's --version output.
+func SetVersionInfo(version, commit, date string) {
+	rootCmd.Version = fmt.Sprintf("%s (commit %s, built %s)", version, commit, date)
+}
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
