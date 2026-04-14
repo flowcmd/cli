@@ -4,11 +4,11 @@ import "testing"
 
 func TestLastLine(t *testing.T) {
 	cases := map[string]string{
-		"":             "",
-		"one":          "one",
-		"one\ntwo":     "two",
-		"one\ntwo\n":   "two",
-		"a\nb\nc\n\n":  "c",
+		"":            "",
+		"one":         "one",
+		"one\ntwo":    "two",
+		"one\ntwo\n":  "two",
+		"a\nb\nc\n\n": "c",
 	}
 	for in, want := range cases {
 		if got := LastLine(in); got != want {

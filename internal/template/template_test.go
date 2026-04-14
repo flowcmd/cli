@@ -71,8 +71,8 @@ func TestRender_OutputTrimmed(t *testing.T) {
 func TestRender_Comparisons(t *testing.T) {
 	res, order := makeResults()
 	cases := map[string]string{
-		`{{ steps.foo.output != '' }}`: "true",
-		`{{ steps.bar.output != '' }}`: "false",
+		`{{ steps.foo.output != '' }}`:  "true",
+		`{{ steps.bar.output != '' }}`:  "false",
 		`{{ steps.bar.exitcode == 2 }}`: "true",
 		`{{ steps.bar.exitcode == 0 }}`: "false",
 	}
@@ -151,12 +151,12 @@ func TestRender_LiteralOnly(t *testing.T) {
 
 func TestEvalBool(t *testing.T) {
 	cases := map[string]bool{
-		"":       false,
-		"false":  false,
-		"0":      false,
-		"true":   true,
-		"hello":  true,
-		"  ":     false,
+		"":      false,
+		"false": false,
+		"0":     false,
+		"true":  true,
+		"hello": true,
+		"  ":    false,
 	}
 	for in, want := range cases {
 		if got := EvalBool(in); got != want {
