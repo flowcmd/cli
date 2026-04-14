@@ -29,7 +29,6 @@ var (
 
 	// Overridable by tests.
 	releasesAPIURL = releasesAPI
-	nowFunc        = time.Now
 )
 
 var updateCmd = &cobra.Command{
