@@ -32,9 +32,11 @@ Examples of unacceptable behavior:
 
 ## Enforcement
 
-Instances of unacceptable behavior may be reported to the project maintainers
-at `<CONTACT_EMAIL_TBD>`. All complaints will be reviewed and investigated
-promptly and fairly.
+Instances of unacceptable behavior can be reported to the project maintainers
+by opening an issue on the [issue tracker](https://github.com/flowcmd/cli/issues).
+For reports that should not be public, mention that you'd prefer to discuss
+privately and a maintainer will follow up. All complaints will be reviewed and
+investigated promptly and fairly.
 
 ## Attribution
 
