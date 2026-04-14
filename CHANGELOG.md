@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-04-14
 
 ### Added
+- `install.sh` (Linux / macOS) and `install.ps1` (Windows) for curl/irm-based installation; no Go toolchain required on the user's machine
+- `flowcmd update` subcommand (with `--check` and `--version` flags) for in-place upgrades
 - YAML workflow runner with sequential and parallel step execution
 - Template interpolation across step outputs (`{{ steps.name.output }}`, `{{ steps[0].output }}`, `.output`/`.error`/`.exitcode`)
 - `when` conditionals for step skipping
