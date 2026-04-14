@@ -24,9 +24,10 @@ var (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <name-or-path>",
-	Short: "Execute a workflow by name (looks up .flowcmd/) or by file path",
-	Args:  cobra.ExactArgs(1),
+	Use:               "run <name-or-path>",
+	Short:             "Execute a workflow by name (looks up .flowcmd/) or by file path",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeWorkflowNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := resolveWorkflow(args[0], os.Stderr)
 		if err != nil {
