@@ -96,6 +96,42 @@ flowcmd update           # upgrade to the latest release
 flowcmd update --check   # see if there's a newer release without installing
 ```
 
+### Shell completion
+
+Tab-completion for commands, flags, and workflow names in your scopes.
+
+**Zsh** — add to `~/.zshrc`:
+
+```sh
+autoload -Uz compinit && compinit  # skip if already in your rc
+source <(flowcmd completion zsh)
+```
+
+**Bash** — add to `~/.bashrc` (requires `bash-completion`):
+
+```sh
+source <(flowcmd completion bash)
+```
+
+**Fish**:
+
+```sh
+flowcmd completion fish > ~/.config/fish/completions/flowcmd.fish
+```
+
+**PowerShell** — add to your profile:
+
+```powershell
+flowcmd completion powershell | Out-String | Invoke-Expression
+```
+
+Reload the shell. Then:
+
+```sh
+flowcmd run <TAB>      # suggests workflows from ./.flowcmd/ and ~/.flowcmd/
+flowcmd remove <TAB>   # same
+```
+
 ## Your first workflow
 
 ```sh
