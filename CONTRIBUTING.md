@@ -25,7 +25,7 @@ make lint      # golangci-lint
 make build     # bin/flowcmd
 ```
 
-Requires Go 1.23+.
+Requires Go 1.24+.
 
 ## Code conventions
 
