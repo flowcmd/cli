@@ -198,6 +198,7 @@ func execShell(ctx context.Context, cmd string) (stdout, stderr string, code int
 	var so, se bytes.Buffer
 	c.Stdout = &so
 	c.Stderr = &se
+	configureCmd(c)
 	runErr := c.Run()
 	stdout = so.String()
 	stderr = se.String()
