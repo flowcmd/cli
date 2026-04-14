@@ -11,6 +11,9 @@ var rootCmd = &cobra.Command{
 	Use:   "flowcmd",
 	Short: "Execute YAML-defined workflows with shell and LLM steps",
 	Long:  "flowcmd runs declarative YAML workflows where shell scripts and LLM calls are first-class citizens. Sequential and parallel steps, templates, retries, and a TUI.",
+	// Keep the cobra-generated `completion` subcommand callable, but don't
+	// clutter --help with it; most users don't set up shell completion.
+	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
 }
 
 // SetVersionInfo wires build-time metadata (injected by goreleaser) into the
