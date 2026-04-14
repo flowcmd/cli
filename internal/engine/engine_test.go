@@ -97,8 +97,8 @@ func TestEngine_RetrySucceedsSecondAttempt(t *testing.T) {
 		Name: "t",
 		Steps: []types.Step{
 			{
-				Name: "flaky",
-				Run:  "if [ -f " + tmp + " ]; then echo ok; else touch " + tmp + "; exit 1; fi",
+				Name:  "flaky",
+				Run:   "if [ -f " + tmp + " ]; then echo ok; else touch " + tmp + "; exit 1; fi",
 				Retry: &types.Retry{Attempts: 3, Delay: 10 * time.Millisecond},
 			},
 		},

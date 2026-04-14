@@ -25,11 +25,11 @@ type Step struct {
 type StepState string
 
 const (
-	StatePending    StepState = "pending"
-	StateRunning    StepState = "running"
-	StateCompleted  StepState = "completed"
-	StateFailed     StepState = "failed"
-	StateSkipped    StepState = "skipped"
+	StatePending   StepState = "pending"
+	StateRunning   StepState = "running"
+	StateCompleted StepState = "completed"
+	StateFailed    StepState = "failed"
+	StateSkipped   StepState = "skipped"
 )
 
 type StepResult struct {

@@ -25,7 +25,7 @@ type Ref struct {
 }
 
 // ExtractRefs scans text for {{ }} blocks and returns parsed refs.
-// Supports comparison expressions like `{{ steps.foo.output != '' }}` by extracting
+// Supports comparison expressions like `{{ steps.foo.output != ” }}` by extracting
 // any step references found inside the expression.
 func ExtractRefs(text string) ([]Ref, error) {
 	if text == "" {
