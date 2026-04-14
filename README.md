@@ -59,14 +59,41 @@ That's the whole idea. Commands you already know, stitched together, with the LL
 
 ## Install
 
+**Linux and macOS:**
+
 ```sh
-go install github.com/flowcmd/cli@latest
+curl -fsSL https://raw.githubusercontent.com/flowcmd/cli/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/flowcmd/cli/main/install.ps1 | iex
 ```
 
 Verify:
 
 ```sh
 flowcmd --version
+```
+
+### Pin a specific version
+
+```sh
+FLOWCMD_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/flowcmd/cli/main/install.sh | sh
+```
+
+### From source (Go 1.24+)
+
+```sh
+go install github.com/flowcmd/cli@latest
+```
+
+### Updating
+
+```sh
+flowcmd update           # upgrade to the latest release
+flowcmd update --check   # see if there's a newer release without installing
 ```
 
 ## Your first workflow
@@ -329,6 +356,18 @@ Parse and schema-check a workflow without running it. Exits non-zero on any erro
 ```sh
 flowcmd validate ./.flowcmd/commit.yml
 ```
+
+### `flowcmd update`
+
+Upgrade flowcmd in place by re-running the install script for your OS.
+
+```sh
+flowcmd update                   # upgrade to the latest release
+flowcmd update --check           # compare against the latest without installing
+flowcmd update --version v0.1.0  # pin to a specific version
+```
+
+`--check` is non-fatal on API errors: it prints a warning and exits 0 so scripts that call it don't break when GitHub is flaky.
 
 ---
 
